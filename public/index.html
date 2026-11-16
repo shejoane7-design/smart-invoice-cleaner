@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Invoice App - 智慧發票記帳系統</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; background-color: var(--bg-color); margin: 0; padding: 30px 20px; color: var(--text-main); }
+        .container { max-width: 900px; margin: 0 auto; }
+        
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 { color: var(--text-main); font-size: 28px; margin-bottom: 8px; }
+        .header p { color: var(--text-muted); font-size: 14px; }
+
+        /* 總金額卡片區 */
+        .dashboard-grid { display: grid; grid-template-columns: 1fr; gap: 20px; margin-bottom: 30px; }
+        .total-card { background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%); color: white; padding: 25px; border-radius: 16px; box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.2); }
+        .total-card h3 { margin: 0; font-size: 14px; font-weight: 500; opacity: 0.9; }
+        .total-card .amount { font-size: 36px; font-weight: bold; margin-top: 10px; }
+
+        /* 上傳區塊 */
+        .upload-section { background: var(--card-bg); border: 2px dashed var(--border); padding: 40px 20px; text-align: center; border-radius: 16px; cursor: pointer; transition: all 0.3s ease; margin-bottom: 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .upload-section:hover { border-color: var(--primary); background: #fdfdff; }
+        .upload-icon { font-size: 40px; margin-bottom: 10px; }
+        .upload-text { font-size: 16px; font-weight: 600; color: var(--text-main); margin-bottom: 5px; }
+        .upload-hint { font-size: 13px; color: var(--text-muted); }
+        input[type="file"] { display: none; }
+
+        /* 狀態訊息 */
+        #statusMessage { text-align: center; font-weight: 600; font-size: 15px; margin-bottom: 20px; min-height: 24px; color: var(--primary); }
+
+        /* 表格與列表區塊 */
+        .section-title { font-size: 20px; font-weight: bold; color: var(--text-main); margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .card-list { display: flex; flex-direction: column; gap: 15px; }
+        
+        .invoice-card { background: var(--card-bg); border-radius: 14px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid var(--border); transition: transform 0.2s; }
+        .invoice-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        
+        .invoice-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+        .seller-info h4 { margin: 0; font-size: 17px; color: var(--text-main); }
+        .seller-info span { font-size: 12px; color: var(--text-muted); background: #f1f5f9; padding: 2px 8px; border-radius: 6px; display: inline-block; margin-top: 4px; }
+        
+        .invoice-meta { text-align: right; }
+        .invoice-amount { font-size: 20px; font-weight: bold; color: var(--primary); }
+        .invoice-date { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+        /* 商品明細清單 */
+        .items-container { margin-top: 10px; background: #f8fafc; border-radius: 8px; padding: 10px 15px; }
+        .item-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; padding: 6px 0; border-bottom: 1px dashed var(--border); }
+        .item-row:last-child { border-bottom: none; }
+        .item-name { color: var(--text-main); font-weight: 500; }
+        .item-category { font-size: 11px; background: #e0e7ff; color: #3730a3; padding: 2px 6px; border-radius: 4px; margin-left: 8px; }
+        .item-price { color: var(--text-muted); font-weight: 600; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>🧾 智慧發票與消費記帳系統</h1>
+        <p>透過 Gemini AI 自動辨識發票內容、智慧分類並同步至雲端資料庫</p>
+    </div>
+
+    <!-- 總金額卡片 -->
+    <div class="dashboard-grid">
+        <div class="total-card">
+            <h3>本月總消費金額</h3>
+            <div class="amount" id="totalAmountText">NT$ 0</div>
+        </div>
+    </div>
+
+    <!-- 圖片上傳區 -->
+    <div class="upload-section" onclick="document.getElementById('invoiceFile').click()">
+        <div class="upload-icon">📸</div>
+        <div class="upload-text">點擊此處或拖曳發票照片進行 AI 辨識</div>
+        <div class="upload-hint">支援 JPG、PNG 格式，自動萃取明細與分類</div>
+        <input type="file" id="invoiceFile" accept="image/*" onchange="uploadInvoice()">
+    </div>
+
+    <div id="statusMessage"></div>
+
+    <!-- 歷史發票與分類明細列表 -->
+    <div class="section-title">
+        <span>📊 消費紀錄與分類明細</span>
+    </div>
+    
+    <div class="card-list" id="invoiceCardList">
+        <div style="text-align: center; color: var(--text-muted); padding: 40px;">載入中...</div>
+    </div>
+</div>
+
+<script>
+    // 取得所有發票與明細
+    async function fetchInvoices() {
+        try {
+            const res = await fetch('/api/invoices');
+            const invoices = await res.json();
+            
+            const listContainer = document.getElementById('invoiceCardList');
+            listContainer.innerHTML = '';
+            
+            let totalSum = 0;
+
+            if (invoices.length === 0) {
+                listContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 40px; background: white; border-radius: 12px;">目前沒有記帳記錄，趕快上傳第一張發票吧！</div>';
+                document.getElementById('totalAmountText').innerText = 'NT$ 0';
+                return;
+            }
+
+            for (const inv of invoices) {
+                totalSum += inv.total_amount || 0;
+
+                // 撈取該張發票對應的品項明細
+                const itemsRes = await fetch(`/api/invoice-items/${inv.id}`);
+                const items = await itemsRes.json();
+
+                let itemsHtml = '';
+                if (items && items.length > 0) {
+                    itemsHtml = '<div class="items-container">';
+                    items.forEach(item => {
+                        itemsHtml += `
+                            <div class="item-row">
+                                <div>
+                                    <span class="item-name">${item.standard_name || item.original_name}</span>
+                                    <span class="item-category">${item.category_id || '未分類'}</span>
+                                </div>
+                                <div class="item-price">x${item.quantity} | NT$ ${item.amount}</div>
+                            </div>
+                        `;
+                    });
+                    itemsHtml += '</div>';
+                }
+
+                // 組合單張發票的卡片 HTML
+                const card = document.createElement('div');
+                card.className = 'invoice-card';
+                card.innerHTML = `
+                    <div class="invoice-header">
+                        <div class="seller-info">
+                            <h4>${inv.seller_name || '未知店家'}</h4>
+                            <span>發票號碼: ${inv.invoice_number || '無'} | 統編: ${inv.seller_ubn || '無'}</span>
+                        </div>
+                        <div class="invoice-meta">
+                            <div class="invoice-amount">NT$ ${inv.total_amount}</div>
+                            <div class="invoice-date">${inv.invoice_date} ${inv.invoice_time || ''}</div>
+                        </div>
+                    </div>
+                    ${itemsHtml}
+                `;
+                listContainer.appendChild(card);
+            }
+
+            document.getElementById('totalAmountText').innerText = `NT$ ${totalSum.toLocaleString()}`;
+        } catch (err) {
+            console.error('無法取得發票資料', err);
+        }
+    }
+
+    // 上傳並進行 AI 辨識
+    async function uploadInvoice() {
+        const fileInput = document.getElementById('invoiceFile');
+        if (fileInput.files.length === 0) return;
+
+        const file = fileInput.files[0];
+        const formData = new FormData();
+        formData.append('invoice', file);
+
+        const statusMsg = document.getElementById('statusMessage');
+        statusMsg.innerText = "🤖 正在透過 Gemini AI 進行視覺辨識、分類與入庫，請稍候...";
+
+        try {
+            const res = await fetch('/api/upload-invoice', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await res.json();
+
+            if (result.success) {
+                statusMsg.innerText = "✅ 發票辨識與分類成功！";
+                fileInput.value = ''; // 清空檔案選擇
+                fetchInvoices(); // 重新整理列表
+            } else {
+                statusMsg.innerText = "❌ 辨識失敗：" + result.error;
+            }
+        } catch (err) {
+            statusMsg.innerText = "❌ 系統發生錯誤";
+            console.error(err);
+        }
+    }
+
+    // 初始化載入
+    fetchInvoices();
+</script>
+
+</body>
+</html>
